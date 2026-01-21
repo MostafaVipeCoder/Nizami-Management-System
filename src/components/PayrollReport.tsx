@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     TrendingUp,
     TrendingDown,
@@ -7,10 +7,13 @@ import {
     Download,
     Wallet,
     Calculator,
-    Crown,
-    Banknote,
-    Trash2,
-    History as HistoryIcon
+    ShieldAlert,
+    Search,
+    User,
+    Users,
+    Calendar,
+    X,
+    PlusCircle
 } from 'lucide-react';
 import { useNizamiStore } from '../store';
 import { cn } from '../utils/cn';
@@ -18,8 +21,14 @@ import { getEmployeePayrollSummary } from '../utils/payroll';
 
 export const PayrollReport: React.FC = () => {
     const { employees, attendance, transactions, addTransaction, deleteTransaction } = useNizamiStore();
-    const [activeMonth, setActiveMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-    const [selectedEmpId, setSelectedEmpId] = useState<string | null>(employees[0]?.id || null);
+    const [activeMonth, setActiveMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
+
+    // Advanced Filter States
+    const [filterPerformance, setFilterPerformance] = useState<string>('all');
+    const [filterShift, setFilterShift] = useState<string>('all');
+    const [salaryRange, setSalaryRange] = useState({ min: 0, max: 50000 });
 
     const [showAddTransaction, setShowAddTransaction] = useState<string | null>(null);
     const [newTrans, setNewTrans] = useState({
@@ -28,8 +37,33 @@ export const PayrollReport: React.FC = () => {
         note: ''
     });
 
-    const handleAddTransaction = (e: React.FormEvent, empId: string) => {
-        e.preventDefault();
+    // Filtering and calculation logic
+    const payrollData = useMemo(() => {
+        return employees.map(emp => {
+            const summary = getEmployeePayrollSummary(emp, attendance, transactions, activeMonth);
+            return {
+                ...emp,
+                summary
+            };
+        }).filter(item => {
+            const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.includes(searchQuery);
+            const matchesPerformance = filterPerformance === 'all' || item.summary.performance.label === filterPerformance;
+            const matchesShift = filterShift === 'all' || item.shift === filterShift;
+            const matchesSalary = item.summary.netSalary >= salaryRange.min && item.summary.netSalary <= salaryRange.max;
+
+            return matchesSearch && matchesPerformance && matchesShift && matchesSalary;
+        });
+    }, [employees, attendance, transactions, activeMonth, searchQuery, filterPerformance, filterShift, salaryRange]);
+
+    const resetFilters = () => {
+        setFilterPerformance('all');
+        setFilterShift('all');
+        setSalaryRange({ min: 0, max: 50000 });
+        setSearchQuery('');
+    };
+
+    const handleAddTransaction = (empId: string) => {
+        if (newTrans.amount <= 0) return;
         addTransaction({
             id: Math.random().toString(36).substr(2, 9),
             employeeId: empId,
@@ -38,240 +72,327 @@ export const PayrollReport: React.FC = () => {
             date: new Date().toISOString().split('T')[0],
             note: newTrans.note
         });
-        setShowAddTransaction(null);
         setNewTrans({ amount: 0, type: 'bonus', note: '' });
+        setShowAddTransaction(null);
     };
 
-    const selectedEmp = employees.find(e => e.id === selectedEmpId);
-    const summary = selectedEmp ? getEmployeePayrollSummary(selectedEmp, attendance, transactions, activeMonth) : null;
+    const totalPayout = payrollData.reduce((acc, curr) => acc + curr.summary.netSalary, 0);
+
+    const exportToCSV = () => {
+        const headers = ['الموظف', 'التقييم', 'اليومية', 'ساعات العمل', 'الراتب الأساسي', 'مكافآت', 'خصومات', 'الصافي'];
+        const rows = payrollData.map(item => [
+            item.name,
+            item.summary.performance.label,
+            item.dailyRate,
+            item.summary.totalHours.toFixed(1),
+            Math.round(item.summary.baseSalary),
+            item.summary.totalBonuses,
+            item.summary.totalDeductions,
+            Math.round(item.summary.netSalary)
+        ]);
+
+        const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `payroll_report_${activeMonth}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
-        <div className="space-y-8 animate-fadeIn px-2 md:px-0">
-            {/* Filters & Actions */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-3 bg-[#0A0A0A] border border-white/5 p-2 rounded-[1.5rem] w-full md:w-auto shadow-2xl">
-                    {/* Month Picker */}
-                    <div className="flex items-center gap-2 px-4 py-3 bg-white/5 rounded-xl border border-white/5">
-                        <Calculator size={14} className="text-slate-500" />
-                        <input
-                            type="month"
-                            value={activeMonth}
-                            onChange={(e) => setActiveMonth(e.target.value)}
-                            className="bg-transparent text-gold font-black uppercase tracking-widest outline-none text-xs"
-                        />
+        <div className="space-y-8 animate-fadeIn text-slate-900">
+            {/* Top Cards Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <div className="relative z-10">
+                        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-2">إجمالي المنصرف المتوقع</p>
+                        <h3 className="text-4xl font-black text-slate-900">
+                            {totalPayout.toLocaleString('en-US').split('.')[0]}
+                            <span className="text-sm font-bold text-orange-500 mr-2">ج.م</span>
+                        </h3>
                     </div>
-
-                    <div className="hidden md:block w-[1px] h-8 bg-white/10" />
-
-                    {/* Employee Dropdown */}
-                    <div className="flex-1 min-w-[200px] flex items-center gap-2 px-4 py-3 bg-white/5 rounded-xl border border-white/5">
-                        <Filter size={14} className="text-slate-500" />
-                        <select
-                            value={selectedEmpId || ''}
-                            onChange={(e) => setSelectedEmpId(e.target.value)}
-                            className="bg-transparent text-white font-bold outline-none flex-1 appearance-none cursor-pointer"
-                        >
-                            <option value="" disabled className="bg-[#0A0A0A]">اختر موظفاً...</option>
-                            {employees.map(e => (
-                                <option key={e.id} value={e.id} className="bg-[#0A0A0A]">
-                                    {e.name}
-                                </option>
-                            ))}
-                        </select>
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                        <Wallet size={40} className="text-orange-500" />
                     </div>
                 </div>
 
-                <button className="flex items-center justify-center gap-3 px-8 py-4 bg-white/5 border border-white/10 hover:border-gold/30 rounded-2xl text-white transition-all shadow-xl group w-full md:w-auto">
-                    <Download size={20} className="text-gold group-hover:-translate-y-1 transition-transform" />
-                    <span className="font-black text-xs uppercase tracking-widest">تحميل التقرير</span>
-                </button>
+                <div className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <div className="relative z-10">
+                        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-2">عدد الموظفين</p>
+                        <h3 className="text-4xl font-black text-slate-900">{payrollData.length}</h3>
+                    </div>
+                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                        <Users size={40} className="text-blue-500" />
+                    </div>
+                </div>
+
+                <div className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
+                    <div className="relative z-10">
+                        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-2">دورة الحساب (10 إلى 10)</p>
+                        <div className="flex flex-col gap-2">
+                            <input
+                                type="month"
+                                value={activeMonth}
+                                onChange={(e) => setActiveMonth(e.target.value)}
+                                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-slate-900 font-black outline-none focus:border-orange-500/50"
+                            />
+                            <p className="text-[10px] text-orange-500 font-bold">من 10 الشهر الحالي إلى 10 الشهر القادم</p>
+                        </div>
+                    </div>
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <Calendar size={40} className="text-slate-400" />
+                    </div>
+                </div>
             </div>
 
-            {selectedEmp && summary ? (
-                <div key={selectedEmp.id} className="rounded-[2.5rem] md:rounded-[3rem] bg-[#0A0A0A] border border-white/5 shadow-2xl overflow-hidden relative group">
-                    <div className="flex flex-col xl:flex-row">
-                        {/* Left Section: Employee & Large Pay Figure */}
-                        <div className="p-8 md:p-12 xl:w-[400px] border-b xl:border-b-0 xl:border-l border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent">
-                            <div className="flex items-center gap-6 mb-10">
-                                <div className="w-16 h-16 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center font-black text-2xl text-gold shadow-2xl">
-                                    {selectedEmp.name[0]}
-                                </div>
-                                <div>
-                                    <h4 className="text-2xl font-black text-white">{selectedEmp.name}</h4>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">عضو فريق العمل</p>
-                                </div>
+            {/* Main Table Interface */}
+            <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-sm overflow-hidden">
+                <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div className="relative w-full max-w-md">
+                        <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                        <input
+                            type="text"
+                            placeholder="بحث بالاسم أو الكود..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 pr-12 pl-4 text-slate-900 outline-none focus:border-orange-500/30 transition-all font-medium"
+                        />
+                    </div>
+                    <div className="flex gap-4 w-full md:w-auto">
+                        <button
+                            onClick={() => setShowFilters(!showFilters)}
+                            className={cn(
+                                "flex-1 md:flex-none px-6 py-3 rounded-xl font-bold text-sm border transition-all flex items-center justify-center gap-2",
+                                showFilters ? "bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-500/20" : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                            )}
+                        >
+                            <Filter size={18} />
+                            تصفية متقدمة
+                        </button>
+                        <button
+                            onClick={exportToCSV}
+                            className="flex-1 md:flex-none px-6 py-3 rounded-xl primary-bg text-white font-black text-sm shadow-lg shadow-orange-500/20 hover:scale-105 transition-all flex items-center justify-center gap-2"
+                        >
+                            <Download size={18} />
+                            تصدير Excel
+                        </button>
+                    </div>
+                </div>
+
+                {/* Advanced Filters Panel */}
+                {showFilters && (
+                    <div className="p-8 bg-slate-50/50 border-b border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-6 animate-fadeIn text-right">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">تقييم الأداء</label>
+                            <select
+                                value={filterPerformance}
+                                onChange={(e) => setFilterPerformance(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none focus:border-orange-500/50"
+                            >
+                                <option value="all">كل التقييمات</option>
+                                <option value="مثالي">مثالي (Excellent)</option>
+                                <option value="جيد">جيد (Good)</option>
+                                <option value="متأخر">متأخر (Late)</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">الشفت (الفترة)</label>
+                            <select
+                                value={filterShift}
+                                onChange={(e) => setFilterShift(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none focus:border-orange-500/50"
+                            >
+                                <option value="all">كل الفترات</option>
+                                <option value="morning">صباحي (Morning)</option>
+                                <option value="evening">مسائي (Evening)</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">نطاق الراتب الصافي</label>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="number"
+                                    placeholder="أقل"
+                                    value={salaryRange.min || ''}
+                                    onChange={(e) => setSalaryRange({ ...salaryRange, min: Number(e.target.value) })}
+                                    className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-700 outline-none focus:border-orange-500/50"
+                                />
+                                <span className="text-slate-300">-</span>
+                                <input
+                                    type="number"
+                                    placeholder="أعلى"
+                                    value={salaryRange.max || ''}
+                                    onChange={(e) => setSalaryRange({ ...salaryRange, max: Number(e.target.value) })}
+                                    className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-700 outline-none focus:border-orange-500/50"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-end">
+                            <button
+                                onClick={resetFilters}
+                                className="w-full py-3 rounded-xl bg-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 transition-all"
+                            >
+                                إعادة تعيين
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-right">
+                        <thead>
+                            <tr className="bg-slate-50/50 text-slate-400 font-black text-[10px] uppercase tracking-widest border-b border-slate-100">
+                                <th className="px-8 py-6">الموظف</th>
+                                <th className="px-6 py-6">التقييم</th>
+                                <th className="px-6 py-6">اليومية</th>
+                                <th className="px-6 py-6">ساعات العمل</th>
+                                <th className="px-6 py-6 text-blue-600">الراتب الأساسي</th>
+                                <th className="px-6 py-6 text-green-600">مكافآت</th>
+                                <th className="px-6 py-6 text-red-600">خصومات</th>
+                                <th className="px-8 py-6 text-orange-600 bg-orange-50/30">الصافي</th>
+                                <th className="px-8 py-6">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {payrollData.length > 0 ? (
+                                payrollData.map((item) => (
+                                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                                        <td className="px-8 py-5">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100">
+                                                    <span className="text-orange-500 font-black">{item.name[0]}</span>
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-900">{item.name}</p>
+                                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">موظف</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className={cn(
+                                                "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                                                item.summary.performance.bg,
+                                                item.summary.performance.color,
+                                                `border-${item.summary.performance.color.split('-')[1]}-200`
+                                            )}>
+                                                {item.summary.performance.label}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5 font-bold text-slate-500">{item.dailyRate}ج</td>
+                                        <td className="px-6 py-5">
+                                            <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-600 font-black text-xs">
+                                                {item.summary.totalHours.toFixed(1)} س
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5 font-black text-slate-900">{Math.round(item.summary.baseSalary).toLocaleString()}ج</td>
+                                        <td className="px-6 py-5 text-green-600 font-black">+{item.summary.totalBonuses.toLocaleString()}ج</td>
+                                        <td className="px-6 py-5 text-red-600 font-black">-{item.summary.totalDeductions.toLocaleString()}ج</td>
+                                        <td className="px-8 py-5 bg-orange-50/20">
+                                            <p className="text-lg font-black text-slate-900">{Math.round(item.summary.netSalary).toLocaleString()}ج</p>
+                                        </td>
+                                        <td className="px-8 py-5">
+                                            <button
+                                                onClick={() => setShowAddTransaction(item.id)}
+                                                className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition-all"
+                                            >
+                                                <Plus size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={8} className="p-20 text-center">
+                                        <div className="flex flex-col items-center gap-4 opacity-20">
+                                            <Search size={48} />
+                                            <p className="font-black uppercase tracking-[0.2em] text-sm">لا توجد نتائج بحث</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Add Transaction Modal */}
+            {showAddTransaction && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+                    <div className="w-full max-w-md bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-2xl animate-fadeIn relative">
+                        <button
+                            onClick={() => setShowAddTransaction(null)}
+                            className="absolute top-6 left-6 text-slate-400 hover:text-slate-900"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div className="text-center mb-8">
+                            <h4 className="text-2xl font-black text-slate-900 mb-2">إضافة عملية مالية</h4>
+                            <p className="text-slate-400 text-sm">للموظف: <span className="text-orange-500 font-bold">{employees.find(e => e.id === showAddTransaction)?.name}</span></p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="flex p-1 bg-slate-50 rounded-2xl border border-slate-100">
+                                <button
+                                    onClick={() => setNewTrans({ ...newTrans, type: 'bonus' })}
+                                    className={cn(
+                                        "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+                                        newTrans.type === 'bonus' ? "bg-white text-green-600 shadow-sm border border-slate-200" : "text-slate-400"
+                                    )}
+                                >
+                                    مكافأة
+                                </button>
+                                <button
+                                    onClick={() => setNewTrans({ ...newTrans, type: 'deduction' })}
+                                    className={cn(
+                                        "flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+                                        newTrans.type === 'deduction' ? "bg-white text-red-600 shadow-sm border border-slate-200" : "text-slate-400"
+                                    )}
+                                >
+                                    خصم
+                                </button>
                             </div>
 
-                            <div className="relative p-8 rounded-[2rem] bg-gold/5 border border-gold/10 overflow-hidden">
-                                <div className="relative z-10">
-                                    <p className="text-[10px] text-gold font-black uppercase tracking-[0.3em] mb-3">إجمالي المستحقات (حالي)</p>
-                                    <div className="flex items-baseline gap-2">
-                                        <h3 className="text-5xl font-black text-white leading-none tracking-tighter">
-                                            {Math.round(summary.netSalary).toLocaleString()}
-                                        </h3>
-                                        <span className="text-sm font-black text-slate-500">جنيه</span>
-                                    </div>
-                                    <div className="mt-6 flex items-center gap-2">
-                                        <div className="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
-                                            <div className="h-full bg-gold animate-shimmer" style={{ width: '100%' }} />
-                                        </div>
-                                        <span className="text-[9px] font-black text-gold/50 uppercase tracking-widest">جاري التنفيذ</span>
-                                    </div>
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">المبلغ (ج.م)</label>
+                                    <input
+                                        type="number"
+                                        value={newTrans.amount || ''}
+                                        onChange={(e) => setNewTrans({ ...newTrans, amount: Number(e.target.value) })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-900 outline-none focus:border-orange-500/50 font-black"
+                                    />
                                 </div>
-                                <Wallet className="absolute -bottom-4 -right-4 w-24 h-24 text-gold/5 rotate-12" />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">ملاحظات</label>
+                                    <input
+                                        type="text"
+                                        placeholder="سبب المكافأة أو الخصم..."
+                                        value={newTrans.note}
+                                        onChange={(e) => setNewTrans({ ...newTrans, note: e.target.value })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-900 outline-none focus:border-orange-500/50"
+                                    />
+                                </div>
                             </div>
 
                             <button
-                                onClick={() => setShowAddTransaction(selectedEmp.id)}
-                                className="w-full mt-8 py-5 rounded-2xl bg-white/5 border border-white/10 hover:border-gold/30 hover:bg-white/[0.08] text-slate-400 hover:text-white transition-all flex items-center justify-center gap-3 font-bold text-xs uppercase tracking-widest group/btn"
+                                onClick={() => handleAddTransaction(showAddTransaction)}
+                                className={cn(
+                                    "w-full py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all active:scale-95",
+                                    newTrans.type === 'bonus' ? "bg-green-600 text-white shadow-green-500/20" : "bg-red-600 text-white shadow-red-500/20"
+                                )}
                             >
-                                <Plus size={18} className="group-hover/btn:rotate-90 transition-transform" />
-                                <span>إضافة معاملة مالية</span>
+                                تأكيد العملية
                             </button>
                         </div>
-
-                        {/* Right Section: Detailed Stats & Transactions */}
-                        <div className="flex-1 flex flex-col">
-                            {/* Detailed Calculation Legend */}
-                            <div className="p-6 border-b border-white/5 bg-white/[0.01]">
-                                <p className="text-[10px] text-slate-500 font-bold mb-0 text-center">
-                                    معادلة الحساب: ( {summary.totalHours.toFixed(1)} س عمل / {selectedEmp.standardHours || 8} س شفت ) × {selectedEmp.dailyRate} جنيه يومية = {Math.round(summary.baseSalary)} جنيه أساسي
-                                </p>
-                            </div>
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-white/5">
-                                {[
-                                    { label: 'ساعات العمل', value: `${summary.totalHours.toFixed(1)} س`, icon: Calculator, color: 'text-blue-400' },
-                                    { label: 'الراتب الأساسي', value: `${Math.round(summary.baseSalary)} ج`, icon: Banknote, color: 'text-slate-400' },
-                                    { label: 'إجمالي المكافآت', value: `+${summary.totalBonuses} ج`, icon: TrendingUp, color: 'text-green-400' },
-                                    { label: 'إجمالي الخصومات', value: `-${summary.totalDeductions} ج`, icon: TrendingDown, color: 'text-red-400' },
-                                ].map((stat, i) => (
-                                    <div key={i} className={cn(
-                                        "p-6 md:p-8 flex flex-col justify-center gap-2",
-                                        i < 3 ? "border-l border-white/5" : ""
-                                    )}>
-                                        <div className="flex items-center gap-2">
-                                            <stat.icon size={14} className={stat.color} />
-                                            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{stat.label}</p>
-                                        </div>
-                                        <p className={cn(
-                                            "text-xl md:text-2xl font-black",
-                                            i === 1 ? "text-white" : stat.color
-                                        )}>
-                                            {stat.value}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Recent Transactions List */}
-                            <div className="p-8 bg-black/20 h-full">
-                                <div className="flex items-center justify-between mb-6">
-                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em]">سجل المعاملات / {activeMonth}</p>
-                                    <HistoryIcon size={14} className="text-slate-700" />
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-                                    {summary.transactions.length > 0 ? (
-                                        summary.transactions.map(t => (
-                                            <div key={t.id} className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 flex justify-between items-center group/item hover:border-gold/20 transition-all">
-                                                <div className="min-w-0 pr-4">
-                                                    <p className="text-sm font-bold text-white truncate">{t.note}</p>
-                                                    <p className="text-[10px] text-slate-600 font-medium">{t.date}</p>
-                                                </div>
-                                                <div className="flex items-center gap-4 shrink-0">
-                                                    <span className={cn(
-                                                        "text-sm font-black",
-                                                        t.type === 'bonus' ? "text-green-500" : "text-red-500"
-                                                    )}>
-                                                        {t.type === 'bonus' ? '+' : '-'}{t.amount}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => deleteTransaction(t.id)}
-                                                        className="p-2 rounded-lg hover:bg-red-500/10 text-slate-700 hover:text-red-500 transition-all opacity-0 group-hover/item:opacity-100"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="col-span-full py-12 flex flex-col items-center justify-center text-slate-700 opacity-30">
-                                            <Wallet size={32} className="mb-2" />
-                                            <p className="text-[9px] font-black uppercase tracking-widest">لا توجد سجلات مالية</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
                     </div>
-
-                    {/* Modal for adding transaction */}
-                    {showAddTransaction === selectedEmp.id && (
-                        <div className="absolute inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
-                            <div className="w-full max-w-sm space-y-8">
-                                <div className="text-center">
-                                    <h5 className="text-3xl font-black text-white mb-2">تعديل مالي</h5>
-                                    <p className="text-gold text-xs font-black uppercase tracking-[0.2em]">للموظف: {selectedEmp.name}</p>
-                                </div>
-
-                                <form onSubmit={(e) => handleAddTransaction(e, selectedEmp.id!)} className="space-y-4">
-                                    <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
-                                        {(['bonus', 'deduction'] as const).map(type => (
-                                            <button
-                                                key={type}
-                                                type="button"
-                                                onClick={() => setNewTrans({ ...newTrans, type })}
-                                                className={cn(
-                                                    "flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                                                    newTrans.type === type ? "bg-gold text-black shadow-lg" : "text-slate-500 hover:text-white"
-                                                )}
-                                            >
-                                                {type === 'bonus' ? 'مكافأة' : 'خصم / سلفة'}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="space-y-4">
-                                        <input
-                                            required
-                                            type="number"
-                                            placeholder="المبلغ (جنيه)"
-                                            value={newTrans.amount || ''}
-                                            onChange={(e) => setNewTrans({ ...newTrans, amount: Number(e.target.value) })}
-                                            className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white text-center text-3xl font-black outline-none focus:border-gold transition-all"
-                                        />
-                                        <input
-                                            required
-                                            type="text"
-                                            placeholder="اكتب السبب هنا..."
-                                            value={newTrans.note}
-                                            onChange={(e) => setNewTrans({ ...newTrans, note: e.target.value })}
-                                            className="w-full bg-white/5 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-gold transition-all"
-                                        />
-                                    </div>
-                                    <div className="flex gap-4 pt-4">
-                                        <button type="submit" className="flex-1 gold-bg text-black py-5 rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95 shadow-2xl">تأكيد العملية</button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAddTransaction(null)}
-                                            className="flex-1 bg-white/5 text-white py-5 rounded-2xl font-black uppercase tracking-widest border border-white/10 hover:bg-white/10 transition-all font-bold"
-                                        >
-                                            إلغاء
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="absolute top-0 left-0 w-64 h-64 bg-gold opacity-[0.03] blur-[100px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-            ) : (
-                <div className="py-40 text-center flex flex-col items-center opacity-30">
-                    <Crown size={64} className="mb-6" />
-                    <h3 className="text-2xl font-black uppercase tracking-[0.5em] text-slate-500">
-                        {employees.length === 0 ? 'لا يوجد موظفين مسجلين' : 'يرجى اختيار موظف لعرض التقرير'}
-                    </h3>
                 </div>
             )}
         </div>

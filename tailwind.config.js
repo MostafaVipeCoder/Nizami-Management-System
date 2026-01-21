@@ -13,18 +13,17 @@ export default {
                 ring: "hsl(var(--ring))",
                 background: "hsl(var(--background))",
                 foreground: "hsl(var(--foreground))",
-                gold: {
-                    light: "#FCF6BA",
-                    DEFAULT: "#BF953F",
-                    dark: "#AA771C",
-                    muted: "#BF953F/30",
+                brand: {
+                    orange: "#FF7E33",
+                    blue: "#3366FF",
+                    slate: "#F8FAFC",
                 },
                 primary: {
-                    DEFAULT: "#BF953F",
-                    foreground: "#050505",
+                    DEFAULT: "#FF7E33",
+                    foreground: "#FFFFFF",
                 },
                 secondary: {
-                    DEFAULT: "#111111",
+                    DEFAULT: "#3366FF",
                     foreground: "#FFFFFF",
                 },
                 destructive: {
@@ -32,20 +31,20 @@ export default {
                     foreground: "hsl(var(--destructive-foreground))",
                 },
                 muted: {
-                    DEFAULT: "#1A1A1A",
+                    DEFAULT: "#F8FAFC",
                     foreground: "hsl(var(--muted-foreground))",
                 },
                 accent: {
-                    DEFAULT: "#BF953F",
-                    foreground: "#050505",
+                    DEFAULT: "#3366FF",
+                    foreground: "#FFFFFF",
                 },
                 popover: {
-                    DEFAULT: "#0A0A0A",
-                    foreground: "#FFFFFF",
+                    DEFAULT: "#FFFFFF",
+                    foreground: "#0F172A",
                 },
                 card: {
-                    DEFAULT: "#0A0A0A",
-                    foreground: "#FFFFFF",
+                    DEFAULT: "#FFFFFF",
+                    foreground: "#0F172A",
                 },
             },
             borderRadius: {
@@ -67,8 +66,8 @@ export default {
                     to: { opacity: "1", transform: "translateY(0)" },
                 },
                 glow: {
-                    "0%, 100%": { boxShadow: "0 0 20px rgba(191, 149, 63, 0.1)" },
-                    "50%": { boxShadow: "0 0 40px rgba(191, 149, 63, 0.3)" },
+                    "0%, 100%": { boxShadow: "0 0 20px rgba(255, 126, 51, 0.1)" },
+                    "50%": { boxShadow: "0 0 40px rgba(255, 126, 51, 0.3)" },
                 },
             },
             animation: {

@@ -4,26 +4,29 @@
 
 @layer base {
     :root {
-        --background: 0 0% 2%;
-        --foreground: 0 0% 100%;
-        --card: 0 0% 4%;
-        --card-foreground: 0 0% 100%;
-        --popover: 0 0% 4%;
-        --popover-foreground: 0 0% 100%;
-        --primary: 38 52% 49%;
-        --primary-foreground: 0 0% 2%;
-        --secondary: 0 0% 9%;
+        --background: 210 40% 98%;
+        --foreground: 222 47% 11%;
+        --card: 0 0% 100%;
+        --card-foreground: 222 47% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 24 95% 53%;
+        /* Orange */
+        --primary-foreground: 0 0% 100%;
+        --secondary: 221 83% 53%;
+        /* Blue */
         --secondary-foreground: 0 0% 100%;
-        --muted: 0 0% 9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 38 52% 49%;
-        --accent-foreground: 0 0% 2%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 38 52% 49%;
-        --radius: 1.5rem;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 221 83% 53%;
+        /* Blue */
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 40% 98%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 24 95% 53%;
+        --radius: 1.25rem;
     }
 }
 
@@ -34,48 +37,39 @@
 
     body {
         @apply bg-background text-foreground;
-        font-family: 'IBM Plex Sans Arabic', 'Outfit', sans-serif;
+        font-family: 'Cairo', sans-serif;
     }
 }
 
-.gold-gradient {
-    background: linear-gradient(to bottom right,
-            #BF953F,
-            #FCF6BA,
-            #B38728,
-            #FBF5B7,
-            #AA771C);
+.brand-gradient {
+    background: linear-gradient(to bottom right, #FF7E33, #FFAC71);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
-.gold-bg {
-    background: linear-gradient(to bottom right,
-            #BF953F,
-            #FCF6BA,
-            #B38728,
-            #FBF5B7,
-            #AA771C);
+.primary-bg {
+    background: linear-gradient(to bottom right, #FF7E33, #FF4500);
 }
 
-.gold-glow {
-    box-shadow: 0 0 50px rgba(191, 149, 63, 0.15);
+.secondary-bg {
+    background: linear-gradient(to bottom right, #3366FF, #0044FF);
 }
 
-.gold-border {
-    border: 1px solid transparent;
-    background-image: linear-gradient(#050505, #050505),
-        linear-gradient(to right, #BF953F, #FCF6BA, #AA771C);
-    background-origin: border-box;
-    background-clip: content-box, border-box;
+.primary-glow {
+    box-shadow: 0 10px 40px rgba(255, 126, 51, 0.2);
+}
+
+.secondary-glow {
+    box-shadow: 0 10px 40px rgba(51, 102, 255, 0.2);
 }
 
 /* Glassmorphism */
 .glass {
-    background: rgba(10, 10, 10, 0.7);
+    background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(191, 149, 63, 0.1);
+    border: 1px solid rgba(226, 232, 240, 0.5);
 }
 
 @keyframes float {
@@ -94,4 +88,10 @@
 
 .animate-float {
     animation: float 6s ease-in-out infinite;
+}
+
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
 }

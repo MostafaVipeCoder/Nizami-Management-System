@@ -1,14 +1,36 @@
 import { AttendanceRecord, Employee, Transaction } from '../types';
+import { isWithinInterval, parseISO, startOfDay, endOfDay, addMonths, subMonths, setDate } from 'date-fns';
 
 /**
- * Calculates total hours worked from a set of attendance records for a specific month.
+ * Gets the start and end dates for the accounting cycle (10th to 9th of next month).
+ * For a given month string "YYYY-MM" (e.g., "2024-05"), the cycle starts on 2024-05-10
+ * and ends on 2024-06-09.
  */
-export const calculateTotalHours = (attendance: AttendanceRecord[], empId: string, month: string): number => {
-    const monthAttendance = attendance.filter(
-        (a) => a.employeeId === empId && a.date.startsWith(month) && a.timeOut
-    );
+export const getCycleRange = (monthStr: string) => {
+    const [year, month] = monthStr.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 10);
+    const endDate = addMonths(startDate, 1);
+    endDate.setDate(9);
 
-    return monthAttendance.reduce((acc, curr) => {
+    return {
+        start: startOfDay(startDate),
+        end: endOfDay(endDate)
+    };
+};
+
+/**
+ * Calculates total hours worked from a set of attendance records for a specific cycle.
+ */
+export const calculateTotalHours = (attendance: AttendanceRecord[], empId: string, monthStr: string): number => {
+    const { start, end } = getCycleRange(monthStr);
+
+    const cycleAttendance = attendance.filter((a) => {
+        if (a.employeeId !== empId || !a.timeOut) return false;
+        const recordDate = parseISO(a.date);
+        return isWithinInterval(recordDate, { start, end });
+    });
+
+    return cycleAttendance.reduce((acc, curr) => {
         const hours = calculateHoursNumber(curr.timeIn, curr.timeOut!);
         return acc + hours;
     }, 0);
@@ -38,25 +60,42 @@ export const calculateHoursNumber = (inStr: string, outStr: string): number => {
 };
 
 /**
- * Summarizes the payroll for an employee for a specific month.
+ * Evaluates employee performance based on attendance percentage.
+ */
+export const evaluatePerformance = (hoursWorked: number, standardHours: number = 8) => {
+    // Assuming 26 working days in a cycle
+    const targetHours = standardHours * 24;
+    const ratio = hoursWorked / targetHours;
+
+    if (ratio >= 0.95) return { label: 'مثالي', color: 'text-green-600', bg: 'bg-green-50' };
+    if (ratio >= 0.75) return { label: 'جيد', color: 'text-blue-600', bg: 'bg-blue-50' };
+    if (ratio >= 0.50) return { label: 'مقبول', color: 'text-orange-600', bg: 'bg-orange-50' };
+    return { label: 'متأخر', color: 'text-red-600', bg: 'bg-red-50' };
+};
+
+/**
+ * Summarizes the payroll for an employee for a specific cycle.
  */
 export const getEmployeePayrollSummary = (
     employee: Employee,
     attendance: AttendanceRecord[],
     transactions: Transaction[],
-    month: string
+    monthStr: string
 ) => {
-    const totalHours = calculateTotalHours(attendance, employee.id, month);
+    const { start, end } = getCycleRange(monthStr);
+    const totalHours = calculateTotalHours(attendance, employee.id, monthStr);
 
-    const monthTrans = transactions.filter(
-        (t) => t.employeeId === employee.id && t.date.startsWith(month)
-    );
+    const cycleTrans = transactions.filter((t) => {
+        if (t.employeeId !== employee.id) return false;
+        const transDate = parseISO(t.date);
+        return isWithinInterval(transDate, { start, end });
+    });
 
-    const totalBonuses = monthTrans
+    const totalBonuses = cycleTrans
         .filter((t) => t.type === 'bonus')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
-    const totalDeductions = monthTrans
+    const totalDeductions = cycleTrans
         .filter((t) => t.type === 'deduction' || t.type === 'penalty')
         .reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -64,12 +103,15 @@ export const getEmployeePayrollSummary = (
     const baseSalary = hourlyRate * totalHours;
     const netSalary = baseSalary + totalBonuses - totalDeductions;
 
+    const performance = evaluatePerformance(totalHours, employee.standardHours);
+
     return {
         totalHours,
         baseSalary,
         totalBonuses,
         totalDeductions,
         netSalary,
-        transactions: monthTrans,
+        performance,
+        transactions: cycleTrans,
     };
 };

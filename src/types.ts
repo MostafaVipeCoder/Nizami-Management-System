@@ -1,5 +1,14 @@
 export type UserRole = 'owner' | 'employee';
 
+export interface User {
+    id: string;
+    email: string;
+    password: string;
+    name: string;
+    isVerified: boolean;
+    verificationCode?: string;
+}
+
 export interface Employee {
     id: string;
     name: string;
@@ -8,6 +17,18 @@ export interface Employee {
     standardHours: number; // e.g., 8
     isActive: boolean;
     joinedDate: Date;
+    shift: 'morning' | 'evening';
+}
+
+export interface ShiftSettings {
+    start: string; // HH:mm
+    end: string;   // HH:mm
+    duration: number;
+}
+
+export interface Settings {
+    morningShift: ShiftSettings;
+    eveningShift: ShiftSettings;
 }
 
 export interface AttendanceRecord {
