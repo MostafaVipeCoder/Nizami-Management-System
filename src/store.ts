@@ -50,6 +50,25 @@ export const useNizamiStore = create<NizamiStore>()(
                 set((state) => ({ users: [...state.users, user] })),
 
             loginUser: (email, pass) => {
+                // التحقق من بيانات Admin الافتراضية من ملف .env أولاً
+                const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+                const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+
+                // إذا تطابقت البيانات مع بيانات Admin
+                if (email === adminEmail && pass === adminPassword) {
+                    const adminUser: User = {
+                        id: 'admin-default',
+                        email: adminEmail,
+                        password: adminPassword,
+                        name: 'المدير',
+                        isVerified: true,
+                        verificationCode: ''
+                    };
+                    set({ currentUser: adminUser });
+                    return null;
+                }
+
+                // التحقق من المستخدمين المسجلين في النظام
                 const user = get().users.find(u => u.email === email && u.password === pass);
                 if (!user) return 'بيانات الدخول غير صحيحة';
                 if (!user.isVerified) return 'الحساب لم يتم تأكيده بعد';

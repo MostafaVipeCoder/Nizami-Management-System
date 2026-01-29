@@ -160,7 +160,7 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             {isAdding && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md overflow-y-auto text-right">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md text-right">
                     <div className="w-full max-w-xl bg-white border border-slate-200 rounded-[2.5rem] p-6 md:p-10 shadow-2xl animate-fadeIn relative my-8">
                         <button onClick={handleClose} className="absolute top-6 left-6 text-slate-400 hover:text-slate-900 transition-colors">
                             <X size={24} />
@@ -276,8 +276,8 @@ export const EmployeeManagement: React.FC = () => {
 
             {/* Employee Detail Modal */}
             {showDetailsFor && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-                    <div className="w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl animate-fadeIn relative flex flex-col max-h-[90vh]">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
+                    <div className="w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl animate-fadeIn relative my-8">
                         <button
                             onClick={() => setShowDetailsFor(null)}
                             className="absolute top-8 left-8 text-slate-400 hover:text-slate-900 z-10"
@@ -295,7 +295,7 @@ export const EmployeeManagement: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-10 space-y-8">
+                        <div className="p-10 space-y-8">
                             <div className="space-y-4">
                                 <h4 className="flex items-center gap-2 text-slate-900 font-black text-sm uppercase tracking-widest">
                                     <History size={16} className="text-orange-500" />
