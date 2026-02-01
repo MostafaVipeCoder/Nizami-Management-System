@@ -15,19 +15,19 @@ export const SettingsPage: React.FC = () => {
     const { settings, updateSettings } = useNizamiStore();
     const [localSettings, setLocalSettings] = useState(settings);
 
-    const handleSave = () => {
-        updateSettings(localSettings);
+    const handleSave = async () => {
+        await updateSettings(localSettings);
         alert('تم حفظ الإعدادات بنجاح');
     };
 
-    const handleReset = () => {
+    const handleReset = async () => {
         if (window.confirm('هل أنت متأكد من استعادة الإعدادات الافتراضية؟')) {
             const defaults = {
                 morningShift: { start: '08:00', end: '16:00', duration: 8 },
                 eveningShift: { start: '16:00', end: '00:00', duration: 8 }
             };
             setLocalSettings(defaults);
-            updateSettings(defaults);
+            await updateSettings(defaults);
         }
     };
 

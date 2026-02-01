@@ -87,14 +87,12 @@ export const EmployeeManagement: React.FC = () => {
         setFormData({ name: '', phone: '', dailyRate: 150, standardHours: 8, shift: 'morning' });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (editingId) {
-            updateEmployee(editingId, formData);
+            await updateEmployee(editingId, formData);
         } else {
-            const id = Math.random().toString(36).substr(2, 9);
-            addEmployee({
-                id,
+            await addEmployee({
                 ...formData,
                 isActive: true,
                 joinedDate: new Date(),
@@ -427,9 +425,9 @@ export const EmployeeManagement: React.FC = () => {
                                         <Edit3 size={18} />
                                     </button>
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) {
-                                                deleteEmployee(e.id);
+                                                await deleteEmployee(e.id);
                                             }
                                         }}
                                         className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"

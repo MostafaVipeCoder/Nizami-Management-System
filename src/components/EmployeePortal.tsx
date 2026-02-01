@@ -49,12 +49,11 @@ export const EmployeePortal: React.FC<EmployeePortalProps> = ({ onBack }) => {
         try {
             if (status) {
                 // Clock Out
-                updateAttendance(status.id, { timeOut: now });
+                await updateAttendance(status.id, { timeOut: now });
                 setMessage({ text: `تم تسجيل انصراف ${employee.name} بنجاح، شكراً لك!`, type: 'success' });
             } else {
                 // Clock In
-                recordAttendance({
-                    id: Math.random().toString(36).substr(2, 9),
+                await recordAttendance({
                     employeeId,
                     date: today,
                     timeIn: now,

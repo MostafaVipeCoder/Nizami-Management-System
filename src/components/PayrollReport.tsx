@@ -62,10 +62,9 @@ export const PayrollReport: React.FC = () => {
         setSearchQuery('');
     };
 
-    const handleAddTransaction = (empId: string) => {
+    const handleAddTransaction = async (empId: string) => {
         if (newTrans.amount <= 0) return;
-        addTransaction({
-            id: Math.random().toString(36).substr(2, 9),
+        await addTransaction({
             employeeId: empId,
             amount: newTrans.amount,
             type: newTrans.type,

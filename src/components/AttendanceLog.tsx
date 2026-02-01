@@ -33,9 +33,9 @@ export const AttendanceLog: React.FC = () => {
         new Date(b.date + 'T' + b.timeIn).getTime() - new Date(a.date + 'T' + a.timeIn).getTime()
     );
 
-    const handleSaveEdit = () => {
+    const handleSaveEdit = async () => {
         if (!editingRecord) return;
-        updateAttendance(editingRecord.id, {
+        await updateAttendance(editingRecord.id, {
             timeIn: editingRecord.timeIn,
             timeOut: editingRecord.timeOut,
             date: editingRecord.date
@@ -43,10 +43,9 @@ export const AttendanceLog: React.FC = () => {
         setEditingRecord(null);
     };
 
-    const handleAddManual = () => {
+    const handleAddManual = async () => {
         if (!newRecord.employeeId) return;
-        recordAttendance({
-            id: Math.random().toString(36).substr(2, 9),
+        await recordAttendance({
             ...newRecord
         });
         setIsAdding(false);
@@ -146,7 +145,11 @@ export const AttendanceLog: React.FC = () => {
                                     <Edit size={16} />
                                 </button>
                                 <button
-                                    onClick={() => deleteAttendance(record.id)}
+                                    onClick={async () => {
+                                        if (window.confirm('هل أنت متأكد من حذف هذا السجل؟')) {
+                                            await deleteAttendance(record.id);
+                                        }
+                                    }}
                                     className="p-2 rounded-lg bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
                                 >
                                     <Trash2 size={16} />

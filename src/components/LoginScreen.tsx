@@ -11,7 +11,7 @@ interface LoginScreenProps {
 type AuthMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess }) => {
-    const { registerUser, loginUser, verifyUser, resetPassword } = useNizamiStore();
+    const { registerUser, loginUser } = useNizamiStore();
 
     const [mode, setMode] = useState<AuthMode>('login');
     const [email, setEmail] = useState('');
@@ -28,42 +28,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess
         setError('');
         setMsg('');
 
-        if (mode === 'login') {
-            const err = loginUser(email, password);
-            if (err) setError(err);
-            else onLoginSuccess();
-        } else if (mode === 'register') {
-            const verificationCode = generateCode();
-            registerUser({
-                id: Math.random().toString(36).substr(2, 9),
-                email,
-                password,
-                name,
-                isVerified: false,
-                verificationCode
-            });
-            console.log(`Verification code for ${email}: ${verificationCode}`);
-            setMode('verify');
-            setMsg('تم إرسال رمز التأكيد إلى بريدك الإلكتروني (تفقده في الكونسول)');
-        } else if (mode === 'verify') {
-            const success = verifyUser(email, code);
-            if (success) {
-                setMsg('تم تأكيد الحساب بنجاح! يمكنك الدخول الآن');
-                setMode('login');
-            } else {
-                setError('الرمز غير صحيح');
+        try {
+            if (mode === 'login') {
+                const err = await loginUser(email, password);
+                if (err) setError(err);
+                else onLoginSuccess();
+            } else if (mode === 'register') {
+                const err = await registerUser(email, password, name);
+                if (err) {
+                    setError(err);
+                } else {
+                    setMsg('تم إنشاء الحساب بنجاح! تفقّد بريدك الإلكتروني لتأكيد الحساب إذا لزم الأمر، ثم قم بتسجيل الدخول.');
+                    setMode('login');
+                }
+            } else if (mode === 'forgot') {
+                setMsg('سيتم إرسال رابط استعادة كلمة المرور قريباً (قيد التنفيذ)');
             }
-        } else if (mode === 'forgot') {
-            setMode('reset');
-            setMsg('قم بتعيين كلمة المرور الجديدة');
-        } else if (mode === 'reset') {
-            const success = resetPassword(email, password);
-            if (success) {
-                setMsg('تم تغيير كلمة المرور بنجاح');
-                setMode('login');
-            } else {
-                setError('حدث خطأ ما');
-            }
+        } catch (err: any) {
+            setError('حدث خطأ غير متوقع: ' + err.message);
         }
     };
 

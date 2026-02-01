@@ -1,34 +1,37 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Employee, AttendanceRecord, Transaction, Settings, User } from './types';
+import { supabase } from './lib/supabase';
 
 interface NizamiStore {
-    users: User[];
     currentUser: User | null;
     employees: Employee[];
     attendance: AttendanceRecord[];
     transactions: Transaction[];
     settings: Settings;
+    isLoading: boolean;
 
     // Actions
-    registerUser: (user: User) => void;
-    loginUser: (email: string, pass: string) => string | null; // returns error message if any
-    logoutUser: () => void;
-    verifyUser: (email: string, code: string) => boolean;
-    resetPassword: (email: string, newPass: string) => boolean;
+    initialize: () => Promise<void>;
+    loginUser: (email: string, pass: string) => Promise<string | null>;
+    registerUser: (email: string, pass: string, name: string) => Promise<string | null>;
+    logoutUser: () => Promise<void>;
 
-    addEmployee: (employee: Employee) => void;
-    updateEmployee: (id: string, updates: Partial<Employee>) => void;
-    deleteEmployee: (id: string) => void;
+    // CRUD Actions
+    fetchData: () => Promise<void>;
 
-    recordAttendance: (record: AttendanceRecord) => void;
-    updateAttendance: (id: string, updates: Partial<AttendanceRecord>) => void;
-    deleteAttendance: (id: string) => void;
+    addEmployee: (employee: Omit<Employee, 'id'>) => Promise<void>;
+    updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
+    deleteEmployee: (id: string) => Promise<void>;
 
-    addTransaction: (transaction: Transaction) => void;
-    deleteTransaction: (id: string) => void;
+    recordAttendance: (record: Omit<AttendanceRecord, 'id'>) => Promise<void>;
+    updateAttendance: (id: string, updates: Partial<AttendanceRecord>) => Promise<void>;
+    deleteAttendance: (id: string) => Promise<void>;
 
-    updateSettings: (updates: Partial<Settings>) => void;
+    addTransaction: (transaction: Omit<Transaction, 'id'>) => Promise<void>;
+    deleteTransaction: (id: string) => Promise<void>;
+
+    updateSettings: (updates: Partial<Settings>) => Promise<void>;
 }
 
 const defaultSettings: Settings = {
@@ -39,106 +42,257 @@ const defaultSettings: Settings = {
 export const useNizamiStore = create<NizamiStore>()(
     persist(
         (set, get) => ({
-            users: [],
             currentUser: null,
             employees: [],
             attendance: [],
             transactions: [],
             settings: defaultSettings,
+            isLoading: false,
 
-            registerUser: (user) =>
-                set((state) => ({ users: [...state.users, user] })),
+            initialize: async () => {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
 
-            loginUser: (email, pass) => {
-                // التحقق من بيانات Admin الافتراضية من ملف .env أولاً
-                const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-                const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
-
-                // إذا تطابقت البيانات مع بيانات Admin
-                if (email === adminEmail && pass === adminPassword) {
-                    const adminUser: User = {
-                        id: 'admin-default',
-                        email: adminEmail,
-                        password: adminPassword,
-                        name: 'المدير',
-                        isVerified: true,
-                        verificationCode: ''
-                    };
-                    set({ currentUser: adminUser });
-                    return null;
+                    set({
+                        currentUser: {
+                            id: session.user.id,
+                            email: session.user.email!,
+                            name: profile?.full_name || 'مستخدم',
+                            isVerified: profile?.is_verified || false,
+                            password: ''
+                        }
+                    });
+                    await get().fetchData();
+                } else {
+                    // Force clear if no session is actually found in Supabase
+                    set({ currentUser: null, employees: [], attendance: [], transactions: [] });
                 }
 
-                // التحقق من المستخدمين المسجلين في النظام
-                const user = get().users.find(u => u.email === email && u.password === pass);
-                if (!user) return 'بيانات الدخول غير صحيحة';
-                if (!user.isVerified) return 'الحساب لم يتم تأكيده بعد';
-                set({ currentUser: user });
+                // Listen for auth changes
+                supabase.auth.onAuthStateChange(async (event, session) => {
+                    if (event === 'SIGNED_IN' && session?.user) {
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', session.user.id)
+                            .single();
+
+                        set({
+                            currentUser: {
+                                id: session.user.id,
+                                email: session.user.email!,
+                                name: profile?.full_name || 'مستخدم',
+                                isVerified: profile?.is_verified || false,
+                                password: ''
+                            }
+                        });
+                        await get().fetchData();
+                    } else if (event === 'SIGNED_OUT') {
+                        set({ currentUser: null, employees: [], attendance: [], transactions: [] });
+                    }
+                });
+            },
+
+            fetchData: async () => {
+                const { currentUser } = get();
+                if (!currentUser) return;
+
+                set({ isLoading: true });
+
+                try {
+                    const [employeesRes, attendanceRes, transactionsRes, settingsRes] = await Promise.all([
+                        supabase.from('nizami_employees').select('*'),
+                        supabase.from('nizami_attendance').select('*'),
+                        supabase.from('nizami_transactions').select('*'),
+                        supabase.from('nizami_settings').select('*').single()
+                    ]);
+
+                    if (employeesRes.error) {
+                        if (employeesRes.error.message.includes('Unauthorized') || employeesRes.error.code === '401' || employeesRes.error.code === 'PGRST301') {
+                            set({ currentUser: null, isLoading: false });
+                            return;
+                        }
+                    }
+
+                    set({
+                        employees: (employeesRes.data || []).map(e => ({
+                            id: e.id,
+                            name: e.name,
+                            phone: e.phone,
+                            dailyRate: Number(e.daily_rate),
+                            standardHours: e.standard_hours,
+                            isActive: e.is_active,
+                            joinedDate: new Date(e.joined_date),
+                            shift: e.shift
+                        })),
+                        attendance: (attendanceRes.data || []).map(a => ({
+                            id: a.id,
+                            employeeId: a.employee_id,
+                            date: a.date,
+                            timeIn: a.time_in,
+                            timeOut: a.time_out,
+                            totalHours: a.total_hours ? Number(a.total_hours) : undefined
+                        })),
+                        transactions: (transactionsRes.data || []).map(t => ({
+                            id: t.id,
+                            employeeId: t.employee_id,
+                            amount: Number(t.amount),
+                            type: t.type,
+                            date: t.date,
+                            note: t.note
+                        })),
+                        settings: settingsRes.data ? {
+                            morningShift: {
+                                start: settingsRes.data.morning_start,
+                                end: settingsRes.data.morning_end,
+                                duration: settingsRes.data.morning_duration
+                            },
+                            eveningShift: {
+                                start: settingsRes.data.evening_start,
+                                end: settingsRes.data.evening_end,
+                                duration: settingsRes.data.evening_duration
+                            }
+                        } : defaultSettings,
+                        isLoading: false
+                    });
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    set({ isLoading: false });
+                }
+            },
+
+            loginUser: async (email, password) => {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) return error.message;
                 return null;
             },
 
-            logoutUser: () => set({ currentUser: null }),
-
-            verifyUser: (email, code) => {
-                const user = get().users.find(u => u.email === email && u.verificationCode === code);
-                if (user) {
-                    set((state) => ({
-                        users: state.users.map(u => u.email === email ? { ...u, isVerified: true } : u)
-                    }));
-                    return true;
-                }
-                return false;
+            registerUser: async (email, password, name) => {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { data: { full_name: name } }
+                });
+                if (error) return error.message;
+                return null;
             },
 
-            resetPassword: (email, newPass) => {
-                const user = get().users.find(u => u.email === email);
-                if (user) {
-                    set((state) => ({
-                        users: state.users.map(u => u.email === email ? { ...u, password: newPass } : u)
-                    }));
-                    return true;
-                }
-                return false;
+            logoutUser: async () => {
+                await supabase.auth.signOut();
             },
 
-            addEmployee: (employee) =>
-                set((state) => ({ employees: [...state.employees, employee] })),
+            addEmployee: async (employee) => {
+                const { currentUser } = get();
+                if (!currentUser) return;
 
-            updateEmployee: (id, updates) =>
-                set((state) => ({
-                    employees: state.employees.map((e) => e.id === id ? { ...e, ...updates } : e)
-                })),
+                const dbEmployee = {
+                    name: employee.name,
+                    phone: employee.phone,
+                    daily_rate: employee.dailyRate,
+                    standard_hours: employee.standardHours,
+                    is_active: employee.isActive,
+                    shift: employee.shift,
+                    joined_date: employee.joinedDate.toISOString().split('T')[0],
+                    owner_id: currentUser.id
+                };
+                const { error } = await supabase.from('nizami_employees').insert([dbEmployee]);
+                if (!error) await get().fetchData();
+                else console.error('Add employee error:', error);
+            },
 
-            deleteEmployee: (id) =>
-                set((state) => ({
-                    employees: state.employees.filter((e) => e.id !== id)
-                })),
+            updateEmployee: async (id, updates) => {
+                const dbUpdates: any = {};
+                if (updates.name) dbUpdates.name = updates.name;
+                if (updates.phone) dbUpdates.phone = updates.phone;
+                if (updates.dailyRate !== undefined) dbUpdates.daily_rate = updates.dailyRate;
+                if (updates.standardHours !== undefined) dbUpdates.standard_hours = updates.standardHours;
+                if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+                if (updates.shift) dbUpdates.shift = updates.shift;
 
-            recordAttendance: (record) =>
-                set((state) => ({ attendance: [...state.attendance, record] })),
+                const { error } = await supabase.from('nizami_employees').update(dbUpdates).eq('id', id);
+                if (!error) await get().fetchData();
+            },
 
-            updateAttendance: (id, updates) =>
-                set((state) => ({
-                    attendance: state.attendance.map((a) => a.id === id ? { ...a, ...updates } : a)
-                })),
+            deleteEmployee: async (id) => {
+                const { error } = await supabase.from('nizami_employees').delete().eq('id', id);
+                if (!error) await get().fetchData();
+            },
 
-            deleteAttendance: (id) =>
-                set((state) => ({
-                    attendance: state.attendance.filter((a) => a.id !== id)
-                })),
+            recordAttendance: async (record) => {
+                const dbRecord = {
+                    employee_id: record.employeeId,
+                    date: record.date,
+                    time_in: record.timeIn,
+                    time_out: record.timeOut,
+                    total_hours: record.totalHours
+                };
+                const { error } = await supabase.from('nizami_attendance').insert([dbRecord]);
+                if (!error) await get().fetchData();
+            },
 
-            addTransaction: (transaction) =>
-                set((state) => ({ transactions: [...state.transactions, transaction] })),
+            updateAttendance: async (id, updates) => {
+                const dbUpdates: any = {};
+                if (updates.timeOut) dbUpdates.time_out = updates.timeOut;
+                if (updates.totalHours !== undefined) dbUpdates.total_hours = updates.totalHours;
 
-            deleteTransaction: (id) =>
-                set((state) => ({
-                    transactions: state.transactions.filter((t) => t.id !== id)
-                })),
+                const { error } = await supabase.from('nizami_attendance').update(dbUpdates).eq('id', id);
+                if (!error) await get().fetchData();
+            },
 
-            updateSettings: (updates) =>
-                set((state) => ({ settings: { ...state.settings, ...updates } })),
+            deleteAttendance: async (id) => {
+                const { error } = await supabase.from('nizami_attendance').delete().eq('id', id);
+                if (!error) await get().fetchData();
+            },
+
+            addTransaction: async (transaction) => {
+                const dbTransaction = {
+                    employee_id: transaction.employeeId,
+                    amount: transaction.amount,
+                    type: transaction.type,
+                    date: transaction.date,
+                    note: transaction.note
+                };
+                const { error } = await supabase.from('nizami_transactions').insert([dbTransaction]);
+                if (!error) await get().fetchData();
+            },
+
+            deleteTransaction: async (id) => {
+                const { error } = await supabase.from('nizami_transactions').delete().eq('id', id);
+                if (!error) await get().fetchData();
+            },
+
+            updateSettings: async (updates) => {
+                const { currentUser } = get();
+                if (!currentUser) return;
+
+                // Map frontend settings back to DB structure
+                const dbUpdates: any = {};
+                if (updates.morningShift) {
+                    dbUpdates.morning_start = updates.morningShift.start;
+                    dbUpdates.morning_end = updates.morningShift.end;
+                    dbUpdates.morning_duration = updates.morningShift.duration;
+                }
+                if (updates.eveningShift) {
+                    dbUpdates.evening_start = updates.eveningShift.start;
+                    dbUpdates.evening_end = updates.eveningShift.end;
+                    dbUpdates.evening_duration = updates.eveningShift.duration;
+                }
+
+                const { error } = await supabase.from('nizami_settings').update(dbUpdates).eq('owner_id', currentUser.id);
+                if (!error) {
+                    set((state) => ({ settings: { ...state.settings, ...updates } }));
+                }
+            },
         }),
         {
             name: 'nizami-storage',
+            partialize: (state) => ({ currentUser: state.currentUser }), // Only persist currentUser
         }
     )
 );
+
