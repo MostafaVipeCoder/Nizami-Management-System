@@ -47,7 +47,10 @@ const App: React.FC = () => {
             )}
 
             {view === 'owner_dashboard' && currentUser && (
-                <OwnerDashboard onLogout={handleLogout} />
+                <OwnerDashboard
+                    onLogout={handleLogout}
+                    onSwitchToPortal={() => setView('employee_portal')}
+                />
             )}
 
             {/* Fallback for dashboard access attempt without login */}
@@ -59,7 +62,7 @@ const App: React.FC = () => {
             )}
 
             {view === 'employee_portal' && (
-                <EmployeePortal onBack={() => setView('landing')} />
+                <EmployeePortal onBack={() => currentUser ? setView('owner_dashboard') : setView('landing')} />
             )}
         </div>
     );

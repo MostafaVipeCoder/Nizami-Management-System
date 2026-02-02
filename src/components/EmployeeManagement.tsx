@@ -41,6 +41,8 @@ export const EmployeeManagement: React.FC = () => {
     const [showQrFor, setShowQrFor] = useState<Employee | null>(null);
     const [showDetailsFor, setShowDetailsFor] = useState<Employee | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'bonuses' | 'deductions'>('all');
+    const [status, setStatus] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState<{
         name: string;
@@ -85,20 +87,32 @@ export const EmployeeManagement: React.FC = () => {
         setIsAdding(false);
         setEditingId(null);
         setFormData({ name: '', phone: '', dailyRate: 150, standardHours: 8, shift: 'morning' });
+        setStatus(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
+        setStatus(null);
+
+        let error = null;
         if (editingId) {
-            await updateEmployee(editingId, formData);
+            error = await updateEmployee(editingId, formData);
         } else {
-            await addEmployee({
+            error = await addEmployee({
                 ...formData,
                 isActive: true,
                 joinedDate: new Date(),
             });
         }
-        handleClose();
+
+        setIsSubmitting(false);
+        if (error) {
+            console.error('Final Submission Error:', error);
+            setStatus({ message: error, type: 'error' });
+        } else {
+            handleClose();
+        }
     };
 
     return (
@@ -168,6 +182,14 @@ export const EmployeeManagement: React.FC = () => {
                         </h3>
 
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            {status && (
+                                <div className={cn(
+                                    "p-4 rounded-2xl text-xs font-bold text-center animate-shake",
+                                    status.type === 'error' ? "bg-red-50 text-red-600 border border-red-100" : "bg-green-50 text-green-600 border border-green-100"
+                                )}>
+                                    {status.message}
+                                </div>
+                            )}
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block pr-2">الاسم الكامل</label>
@@ -227,9 +249,20 @@ export const EmployeeManagement: React.FC = () => {
                             </div>
                             <button
                                 type="submit"
-                                className="w-full primary-bg text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-500/20 transition-all active:scale-95"
+                                disabled={isSubmitting}
+                                className={cn(
+                                    "w-full primary-bg text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-500/20 transition-all active:scale-95",
+                                    isSubmitting && "opacity-50 cursor-not-allowed"
+                                )}
                             >
-                                {editingId ? 'حفظ التغييرات' : 'تسجيل الموظف'}
+                                {isSubmitting ? (
+                                    <div className="flex items-center justify-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>جاري المعالجة...</span>
+                                    </div>
+                                ) : (
+                                    editingId ? 'حفظ التغييرات' : 'تسجيل الموظف'
+                                )}
                             </button>
                         </form>
                     </div>

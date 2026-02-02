@@ -9,6 +9,7 @@ interface QRScannerProps {
 
 export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
     const scannerRef = useRef<Html5Qrcode | null>(null);
+    const hasScanned = useRef(false);
 
     useEffect(() => {
         const scannerId = "qr-reader";
@@ -16,17 +17,28 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
         scannerRef.current = new Html5Qrcode(scannerId);
 
         const config = {
-            fps: 10,
+            fps: 15, // Smoothness
             qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
+            aspectRatio: 1.0,
+            showTorchButtonIfSupported: true,
         };
 
         scannerRef.current.start(
             { facingMode: "environment" },
             config,
             (decodedText) => {
-                onScan(decodedText);
-                stopScanner();
+                if (hasScanned.current) return;
+
+                const cleanedText = decodedText.trim();
+                if (cleanedText) {
+                    hasScanned.current = true;
+                    // Provide haptic feedback if available
+                    if ('vibrate' in navigator) {
+                        navigator.vibrate(100);
+                    }
+                    onScan(cleanedText);
+                    stopScanner();
+                }
             },
             (errorMessage) => {
                 // Ignore constant errors like QR not found in frame

@@ -29,45 +29,69 @@ export const EmployeePortal: React.FC<EmployeePortalProps> = ({ onBack }) => {
     const activeEmployees = employees.filter(e => e.isActive);
 
     const getCurrentStatus = (employeeId: string) => {
-        const today = new Date().toISOString().split('T')[0];
-        return attendance.find(a => a.employeeId === employeeId && a.date === today && !a.timeOut);
+        // Find any record that doesn't have a timeOut, 
+        // starting from today and looking back 1 day (for night shifts)
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const todayStr = today.toISOString().split('T')[0];
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        return attendance
+            .filter(a => a.employeeId === employeeId && !a.timeOut)
+            .find(a => a.date === todayStr || a.date === yesterdayStr);
     };
 
     const handleAction = async (employeeId: string) => {
-        const employee = employees.find(e => e.id === employeeId);
+        const cleanedId = employeeId.trim();
+        const employee = employees.find(e => e.id === cleanedId);
+
         if (!employee) {
-            setMessage({ text: 'عذراً، الموظف غير موجود', type: 'error' });
+            setMessage({ text: 'عذراً، كود الموظف غير صحيح أو غير مسجل', type: 'error' });
             setTimeout(() => setMessage(null), 3000);
             return;
         }
 
+        // Prevention of accidental double-tapping/scanning
+        if (loading) return;
+
         setLoading(true);
-        const status = getCurrentStatus(employeeId);
+        const status = getCurrentStatus(cleanedId);
         const now = new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
-        const today = new Date().toISOString().split('T')[0];
+        const todayStr = new Date().toISOString().split('T')[0];
 
         try {
             if (status) {
                 // Clock Out
-                await updateAttendance(status.id, { timeOut: now });
-                setMessage({ text: `تم تسجيل انصراف ${employee.name} بنجاح، شكراً لك!`, type: 'success' });
+                // Check if they just clocked in (within 1 minute) to prevent accidental double scan
+                const [hIn, mIn] = status.timeIn.split(':').map(Number);
+                const [hNow, mNow] = now.split(':').map(Number);
+                const diffMinutes = (hNow * 60 + mNow) - (hIn * 60 + mIn);
+
+                if (status.date === todayStr && diffMinutes < 1) {
+                    setMessage({ text: 'تم تسجيل حضورك بالفعل للتو!', type: 'error' });
+                } else {
+                    await updateAttendance(status.id, { timeOut: now });
+                    setMessage({ text: `تم تسجيل انصراف ${employee.name} بنجاح الساعة ${now}. شكراً لك!`, type: 'success' });
+                }
             } else {
                 // Clock In
                 await recordAttendance({
-                    employeeId,
-                    date: today,
+                    employeeId: cleanedId,
+                    date: todayStr,
                     timeIn: now,
                 });
-                setMessage({ text: `تم تسجيل حضور ${employee.name} بنجاح، بالتوفيق!`, type: 'success' });
+                setMessage({ text: `تم تسجيل حضور ${employee.name} بنجاح الساعة ${now}. بالتوفيق!`, type: 'success' });
             }
             setSelectedEmployee(null);
-            setTimeout(() => setMessage(null), 4000);
         } catch (err) {
-            setMessage({ text: 'حدث خطأ ما، يرجى المحاولة مرة أخرى', type: 'error' });
-            setTimeout(() => setMessage(null), 3000);
+            console.error('Attendance action error:', err);
+            setMessage({ text: 'حدث خطأ أثناء الاتصال بالنظام، يرجى المحاولة مرة أخرى', type: 'error' });
         } finally {
             setLoading(false);
             setIsScanning(false);
+            setTimeout(() => setMessage(null), 5000);
         }
     };
 

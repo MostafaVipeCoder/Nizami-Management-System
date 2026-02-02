@@ -7,23 +7,26 @@ import {
     Settings,
     LogOut,
     Bell,
-    Search,
     Plus,
-    Crown
+    Crown,
+    QrCode
 } from 'lucide-react';
 import { EmployeeManagement } from './EmployeeManagement';
 import { AttendanceLog } from './AttendanceLog';
 import { PayrollReport } from './PayrollReport';
 import { SettingsPage } from './SettingsPage';
 import { cn } from '../utils/cn';
+import { useNizamiStore } from '../store';
+import { getEmployeePayrollSummary } from '../utils/payroll';
 
 interface OwnerDashboardProps {
     onLogout: () => void;
+    onSwitchToPortal: () => void;
 }
 
 type Tab = 'overview' | 'employees' | 'attendance' | 'payroll' | 'settings';
 
-export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
+export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout, onSwitchToPortal }) => {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
 
     const navItems = [
@@ -39,7 +42,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
             {/* Mobile Top Header */}
             <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 relative z-30">
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 primary-bg rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
                         <Crown className="text-white w-4 h-4" />
                     </div>
                     <h1 className="text-lg font-black brand-gradient tracking-tight">نظامي</h1>
@@ -56,7 +59,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
             <aside className="hidden md:flex w-80 border-l border-slate-200 bg-white flex-col relative z-20">
                 <div className="p-8 pb-12">
                     <div className="flex items-center gap-3 mb-10">
-                        <div className="w-12 h-12 primary-bg rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+                        <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
                             <Crown className="text-white w-6 h-6" />
                         </div>
                         <div>
@@ -83,6 +86,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
                                 </div>
                             </button>
                         ))}
+
+                        <div className="pt-8 mt-8 border-t border-slate-100">
+                            <button
+                                onClick={onSwitchToPortal}
+                                className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all group"
+                            >
+                                <QrCode className="w-5 h-5" />
+                                <div className="text-right">
+                                    <p className="font-black text-xs uppercase tracking-widest">ماسح الحضور</p>
+                                </div>
+                            </button>
+                        </div>
                     </nav>
                 </div>
 
@@ -124,10 +139,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
                     </div>
                 </header>
 
-                {/* Mobile Title */}
-                <h2 className="md:hidden text-3xl font-black text-slate-900 mb-6">
-                    {navItems.find(i => i.id === activeTab)?.label}
-                </h2>
+                {/* Mobile Title with Logout */}
+                <div className="md:hidden flex items-center justify-between mb-8">
+                    <h2 className="text-3xl font-black text-slate-900">
+                        {navItems.find(i => i.id === activeTab)?.label}
+                    </h2>
+                    <button
+                        onClick={onLogout}
+                        className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center border border-red-100"
+                    >
+                        <LogOut className="w-5 h-5" />
+                    </button>
+                </div>
 
                 {/* Dynamic Views */}
                 <div className="animate-fadeIn">
@@ -140,33 +163,35 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onLogout }) => {
             </main>
 
             {/* Mobile Bottom Navigation */}
-            <nav className="md:hidden fixed bottom-6 left-6 right-6 bg-white/80 backdrop-blur-xl border border-slate-200 px-6 py-4 rounded-[2rem] flex items-center justify-between z-30 shadow-2xl">
+            <nav className="md:hidden fixed bottom-6 left-6 right-6 bg-white shadow-2xl border border-slate-200 p-2 rounded-2xl flex items-center justify-around z-30">
                 {navItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => setActiveTab(item.id as Tab)}
                         className={cn(
-                            "flex flex-col items-center gap-1 transition-all",
-                            activeTab === item.id ? "text-orange-500 scale-110" : "text-slate-400"
+                            "flex flex-col items-center gap-1 p-2 rounded-xl transition-all",
+                            activeTab === item.id ? "text-orange-500 bg-orange-50" : "text-slate-400"
                         )}
                     >
-                        <item.icon className="w-6 h-6" />
-                        <span className="text-[8px] font-black uppercase tracking-tighter">{item.label}</span>
+                        <item.icon className="w-5 h-5" />
+                        <span className="text-[8px] font-bold">{item.label}</span>
                     </button>
                 ))}
+                <button
+                    onClick={onSwitchToPortal}
+                    className="flex flex-col items-center gap-1 text-orange-600 bg-orange-50 p-2 rounded-xl border border-orange-100"
+                >
+                    <QrCode className="w-5 h-5" />
+                    <span className="text-[8px] font-bold">الماسح</span>
+                </button>
             </nav>
         </div>
     );
 };
 
-import { useNizamiStore } from '../store';
-import { getEmployeePayrollSummary } from '../utils/payroll';
-
 const OverviewGrid = () => {
     const { employees, attendance, transactions } = useNizamiStore();
 
-    // Determine the current active cycle month
-    // If today is < 10th, we are still in the previous month's cycle (e.g. Oct 5 is in Sep 10-Oct 10 cycle)
     const now = new Date();
     const currentMonthStr = now.getDate() < 10
         ? new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7)
